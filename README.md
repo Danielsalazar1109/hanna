@@ -1,36 +1,107 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hanna Queue Tickets (Student Ticket + Admin Dashboard)
 
-## Getting Started
+A full-stack Next.js (App Router) web application for student service **queue tickets**.
 
-First, run the development server:
+Students do **not** create accounts. They enter only:
+
+- Full name
+- Student ID
+
+The system stores the ticket in **MongoDB** and generates a unique, sequential ticket number (example: `A-1042`).
+
+## Features
+
+### Student
+- Request a queue ticket using **Full name** + **Student ID**
+- Ticket is stored permanently in **MongoDB**
+- A unique **ticket number** is generated (example: `A-1042`)
+- Confirmation screen shows:
+  - Name
+  - Student ID
+  - Ticket number
+- Print or download the confirmation
+
+### Admin
+- Secure login (credentials via env vars; password stored as a **bcrypt hash**, not plaintext)
+- Dashboard:
+  - View all tickets/appointments (ordered by ticket number)
+  - Search / filter:
+    - student name
+    - student ID
+    - ticket number
+    - date (created-at day)
+    - status
+  - Update appointment status:
+    - Scheduled
+    - Completed
+    - Cancelled
+    - No Show
+  - Stats:
+    - Total
+    - Today
+    - Completed
+    - Cancelled
+
+## Setup
+
+### 1) Install dependencies
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd hanna
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2) Configure environment variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Create `hanna/.env.local` with these variables:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `MONGODB_URI`
+- `JWT_SECRET`
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD_HASH`
 
-## Learn More
+> If you have a `.env.example`, you can copy it to `.env.local` and fill in values.
 
-To learn more about Next.js, take a look at the following resources:
+#### Generating `ADMIN_PASSWORD_HASH`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Generate a bcrypt hash (12 rounds) and paste it into `ADMIN_PASSWORD_HASH`:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+cd hanna
+node -e "const bcrypt=require('bcryptjs'); bcrypt.hash(process.argv[1], 12).then(h=>console.log(h))" "YourAdminPasswordHere"
+```
 
-## Deploy on Vercel
+### 3) Start MongoDB
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Make sure MongoDB is running and reachable at your `MONGODB_URI`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 4) Run the dev server
+
+```bash
+cd hanna
+npm run dev
+```
+
+Open:
+- Home: `http://localhost:3000/`
+- Student: `http://localhost:3000/student`
+- Admin login: `http://localhost:3000/admin/login`
+
+## How to use
+
+### Admin workflow (recommended first)
+1. Go to `/admin/login` and sign in
+2. Go to `/admin/dashboard`
+3. View the queue (ordered by ticket number) and update statuses as tickets are served
+
+### Student workflow
+1. Go to `/student`
+2. Enter **Full name** + **Student ID**
+3. Submit to generate a ticket
+4. Print or download the confirmation
+
+## Notes
+
+- Ticket numbers are generated using an atomic MongoDB counter (`Counter` collection), which prevents duplicates.
+- This app is a **first-come-first-served queue**: tickets are served in ascending ticket order.
+- There are **no appointment slots** or date/time selection in the student flow.
