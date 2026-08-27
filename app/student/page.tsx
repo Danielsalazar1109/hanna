@@ -279,21 +279,6 @@ export default function StudentQueueTicketPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setConfirmation(null);
-                  setIsExisting(false);
-                  setSubmitError(null);
-                  setStudentName("");
-                  setStudentNumber("");
-                  setServiceType("");
-                  setStep("lookup");
-                }}
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
-              >
-                Check another ID
-              </button>
-              <button
-                type="button"
                 onClick={() => router.push("/")}
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
               >

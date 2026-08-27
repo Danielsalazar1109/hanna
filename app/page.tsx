@@ -14,7 +14,7 @@ export default function HomePage() {
             height={400}
             className="mx-auto"
           />
-          <h1 className="text-6xl tracking-tight font-bold text-blue-950 dark:text-blue-50 sm:text-4xl">
+          <h1 className="text-4xl tracking-tight font-bold text-blue-950 dark:text-blue-50 sm:text-3xl">
             SMARTQUEUE
           </h1>
           <p className="mt-3 text-base leading-7 text-blue-400 dark:text-blue-50">
