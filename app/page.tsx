@@ -56,16 +56,12 @@ export default function HomePage() {
         </header>
 
         <main className="mt-10 grid gap-5 sm:grid-cols-2">
-          <button className="flex items-center justify-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold leading-7 text-white hover:bg-blue-500">
-          <Link href="/student/">
+          <Link className="flex items-center justify-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold leading-7 text-white hover:bg-blue-500" href="/student/">
             Im a student
           </Link>
-          </button>
-          <button className="flex items-center justify-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold leading-7 text-white hover:bg-blue-500">
-           <Link href="/admin/login">
+           <Link className="flex items-center justify-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold leading-7 text-white hover:bg-blue-500" href="/admin/login">
             Im an admin
           </Link>
-          </button>
         </main>
 
         <footer className="mt-10 text-center text-sm text-zinc-500 dark:text-zinc-500">
