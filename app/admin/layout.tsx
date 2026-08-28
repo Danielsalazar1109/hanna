@@ -29,6 +29,12 @@ export default function AdminLayout({
               >
                 Service types
               </Link>
+              <Link
+                href="/admin/schools"
+                className="text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
+              >
+                Schools
+              </Link>
             </nav>
           </div>
           <div className="text-sm text-zinc-600 dark:text-zinc-400">Admin</div>

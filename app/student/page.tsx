@@ -10,6 +10,7 @@ type AppointmentDto = {
   studentName: string;
   studentId: string;
   studentNumber: string;
+  school: string;
   serviceType: string;
   status: string;
   createdAt: string;
@@ -23,6 +24,7 @@ type BookingResponse = {
 };
 
 type ServiceTypeItem = { id: string; name: string; sortOrder: number };
+type SchoolItem = { id: string; name: string; sortOrder: number };
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -55,10 +57,15 @@ export default function StudentQueueTicketPage() {
   const [studentId, setStudentId] = useState("");
   const [studentName, setStudentName] = useState("");
   const [studentNumber, setStudentNumber] = useState("");
+
   const [serviceType, setServiceType] = useState("");
+  const [school, setSchool] = useState("");
 
   const [serviceTypes, setServiceTypes] = useState<ServiceTypeItem[]>([]);
   const [serviceTypesError, setServiceTypesError] = useState<string | null>(null);
+
+  const [schools, setSchools] = useState<SchoolItem[]>([]);
+  const [schoolsError, setSchoolsError] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -94,6 +101,7 @@ export default function StudentQueueTicketPage() {
     <div class="row"><span class="label">Name:</span> <span class="value">${confirmation.studentName}</span></div>
     <div class="row"><span class="label">Student ID:</span> <span class="value">${confirmation.studentId}</span></div>
     <div class="row"><span class="label">Phone:</span> <span class="value">${confirmation.studentNumber}</span></div>
+    <div class="row"><span class="label">School:</span> <span class="value">${confirmation.school}</span></div>
     <div class="row"><span class="label">Service:</span> <span class="value">${confirmation.serviceType}</span></div>
     <div class="row"><span class="label">Issued at:</span> <span class="value">${issuedAt}</span></div>
     <div class="row"><span class="label">Ticket Number:</span> <span class="value">${confirmation.ticketNumber}</span></div>
@@ -105,6 +113,7 @@ export default function StudentQueueTicketPage() {
 
   async function loadServiceTypes() {
     setServiceTypesError(null);
+
     try {
       const res = await fetch("/api/student/service-types");
       const data = (await res.json().catch(() => null)) as
@@ -128,10 +137,35 @@ export default function StudentQueueTicketPage() {
     }
   }
 
+  async function loadSchools() {
+    setSchoolsError(null);
+
+    try {
+      const res = await fetch("/api/student/schools");
+      const data = (await res.json().catch(() => null)) as
+        | { items: SchoolItem[] }
+        | { error: string }
+        | null;
+
+      if (!res.ok || !data || "error" in data) {
+        throw new Error(data && "error" in data ? data.error : "Failed to load schools.");
+      }
+
+      const items = Array.isArray(data.items) ? data.items : [];
+      setSchools(items);
+      if (!school && items[0]) {
+        setSchool(items[0].name);
+      }
+    } catch (e) {
+      setSchoolsError(String(e));
+    }
+  }
+
   useEffect(() => {
     // Load once on mount (defer so we don't setState synchronously inside the effect body).
     queueMicrotask(() => {
       void loadServiceTypes();
+      void loadSchools();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once
   }, []);
@@ -179,7 +213,13 @@ export default function StudentQueueTicketPage() {
       const res = await fetch("/api/student/book", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ studentName, studentId, studentNumber, serviceType }),
+        body: JSON.stringify({
+          studentName,
+          studentId,
+          studentNumber,
+          school,
+          serviceType,
+        }),
       });
 
       const data = (await res.json().catch(() => null)) as
@@ -235,6 +275,12 @@ export default function StudentQueueTicketPage() {
                 </dd>
               </div>
               <div className="flex items-start justify-between gap-6">
+                <dt className="text-sm text-zinc-600 dark:text-zinc-400">School</dt>
+                <dd className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                  {confirmation.school}
+                </dd>
+              </div>
+              <div className="flex items-start justify-between gap-6">
                 <dt className="text-sm text-zinc-600 dark:text-zinc-400">Service</dt>
                 <dd className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
                   {confirmation.serviceType}
@@ -270,9 +316,7 @@ export default function StudentQueueTicketPage() {
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  downloadHtml(`ticket-${confirmation.ticketNumber}.html`, ticketHtml)
-                }
+                onClick={() => downloadHtml(`ticket-${confirmation.ticketNumber}.html`, ticketHtml)}
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
               >
                 Download
@@ -376,6 +420,32 @@ export default function StudentQueueTicketPage() {
                   className="h-11 rounded-xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 shadow-sm outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
                   required
                 />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                  School
+                </label>
+
+                {schoolsError ? (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                    {schoolsError}
+                  </div>
+                ) : null}
+
+                <select
+                  value={school}
+                  onChange={(e) => setSchool(e.target.value)}
+                  className="h-11 rounded-xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 shadow-sm outline-none focus:border-zinc-400 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+                  required
+                  disabled={!schools.length}
+                >
+                  {schools.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid gap-2">

@@ -10,6 +10,7 @@ type Appointment = {
   studentName: string;
   studentId: string;
   studentNumber: string;
+  school?: string;
   serviceType?: string;
   status: "Scheduled" | "Completed" | "Cancelled" | "No Show";
   createdAt: string;
@@ -253,6 +254,9 @@ export default function AdminDashboardPage() {
                   Service
                 </th>
                 <th className="border-b border-zinc-200 py-3 pr-3 dark:border-zinc-800">
+                  School
+                </th>
+                <th className="border-b border-zinc-200 py-3 pr-3 dark:border-zinc-800">
                   Issued
                 </th>
                 <th className="border-b border-zinc-200 py-3 pr-3 dark:border-zinc-800">
@@ -267,7 +271,7 @@ export default function AdminDashboardPage() {
               {appointmentsLoading ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="py-6 text-sm text-zinc-600 dark:text-zinc-400"
                   >
                     Loading…
@@ -290,6 +294,9 @@ export default function AdminDashboardPage() {
                     </td>
                     <td className="border-b border-zinc-100 py-3 pr-3 dark:border-zinc-900">
                       {a.serviceType ?? "—"}
+                    </td>
+                    <td className="border-b border-zinc-100 py-3 pr-3 dark:border-zinc-900">
+                      {a.school ?? "—"}
                     </td>
                     <td className="border-b border-zinc-100 py-3 pr-3 dark:border-zinc-900">
                       {formatDateTime(a.createdAt)}
@@ -327,7 +334,7 @@ export default function AdminDashboardPage() {
               ) : (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="py-6 text-sm text-zinc-600 dark:text-zinc-400"
                   >
                     No tickets found.

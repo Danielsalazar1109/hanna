@@ -16,6 +16,7 @@ const AppointmentSchema = new mongoose.Schema(
     studentName: { type: String, required: true },
     studentId: { type: String, required: true },
     studentNumber: { type: String, required: true },
+    school: { type: String, required: true },
     serviceType: { type: String, required: true },
     status: {
       type: String,
@@ -32,6 +33,7 @@ AppointmentSchema.index({ ticketNumber: 1 }, { unique: true });
 AppointmentSchema.index({ ticketSeq: 1 });
 AppointmentSchema.index({ status: 1 });
 AppointmentSchema.index({ serviceType: 1 });
+AppointmentSchema.index({ school: 1 });
 
 export type AppointmentDoc = InferSchemaType<typeof AppointmentSchema> & {
   _id: Types.ObjectId;

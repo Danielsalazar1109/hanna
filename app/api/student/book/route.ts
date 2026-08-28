@@ -3,6 +3,7 @@ import { connectMongo } from "@/lib/mongodb";
 import { AppointmentModel } from "@/lib/models/Appointment";
 import { CounterModel } from "@/lib/models/Counter";
 import { ServiceTypeModel } from "@/lib/models/ServiceType";
+import { SchoolModel } from "@/lib/models/School";
 
 export const runtime = "nodejs";
 
@@ -38,12 +39,15 @@ export async function POST(req: Request) {
     typeof body?.studentNumber === "string" ? body.studentNumber.trim() : "";
   const serviceType =
     typeof body?.serviceType === "string" ? body.serviceType.trim() : "";
+  const school = typeof (body as { school?: unknown } | null)?.school === "string"
+    ? String((body as { school?: unknown }).school).trim()
+    : "";
 
-  if (!studentName || !studentId || !studentNumber || !serviceType) {
+  if (!studentName || !studentId || !studentNumber || !serviceType || !school) {
     return NextResponse.json(
       {
         error:
-          "Full name, student ID, phone number, and service type are required.",
+          "Full name, student ID, phone number, school, and service type are required.",
       },
       { status: 400 }
     );
@@ -56,6 +60,11 @@ export async function POST(req: Request) {
 
   if (!validServiceType) {
     return NextResponse.json({ error: "Invalid service type." }, { status: 400 });
+  }
+
+  const validSchool = await SchoolModel.findOne({ name: school, enabled: true }).lean();
+  if (!validSchool) {
+    return NextResponse.json({ error: "Invalid school." }, { status: 400 });
   }
 
   // Prevent duplicate active appointments per studentId.
@@ -76,6 +85,7 @@ export async function POST(req: Request) {
         studentName: existing.studentName,
         studentId: existing.studentId,
         studentNumber: existing.studentNumber,
+        school: existing.school,
         serviceType: existing.serviceType,
         status: existing.status,
         createdAt: existing.createdAt,
@@ -91,6 +101,7 @@ export async function POST(req: Request) {
     studentName,
     studentId,
     studentNumber,
+    school,
     serviceType,
     status: "Scheduled",
   });
@@ -104,6 +115,7 @@ export async function POST(req: Request) {
       studentName: appointment.studentName,
       studentId: appointment.studentId,
       studentNumber: appointment.studentNumber,
+      school: appointment.school,
       serviceType: appointment.serviceType,
       status: appointment.status,
       createdAt: appointment.createdAt,

@@ -14,41 +14,45 @@ export default function HomePage() {
             height={400}
             className="mx-auto"
           />
-          <h1 className="text-4xl tracking-tight font-bold text-blue-950 dark:text-blue-50 sm:text-3xl">
+          <h1 className="text-5xl tracking-tight font-bold text-blue-900 dark:text-blue-50 sm:text-3xl">
             SMARTQUEUE
           </h1>
-          <p className="mt-3 text-base leading-7 text-blue-400 dark:text-blue-50">
+          <p className="mt-3 text-base leading-7 text-blue-400 dark:text-blue-50 mx-16 text-lg">
             DIGITAL QUEUE MANAGEMENT SYSTEM
           </p>
 
-          <p>
+          <p className="mt-3 mx-12 text-lg">
             A smart and convenient queue management system that allows students to get a queue number, monitor their turn in real-time and save time
           </p>
-          <div>
-            <h2 className="mt-10 text-2xl tracking-tight font-bold text-blue-950 dark:text-blue-50 sm:text-4xl">
-              BENEFITS FOR STUDENTS
-            </h2>
-          <TitleBar
-            title="Real-Time Queue Monitoring"
-            subtitle="Check your queue status anytime, anywhere."
-            logoSrc="/smartqueue.png"
-          />
-          <TitleBar
-            title="Turn Notifications"
-            subtitle="Get notified when your turn is approaching or it's your turn."
-            logoSrc="/smartqueue.png"
-          />
-          <TitleBar
-            title="Estimated Waiting Time"
-            subtitle="Know the estimated waiting time before your turn."
-            logoSrc="/smartqueue.png"
-          />
-          <TitleBar
-            title="More convenience & Time Savings"
-            subtitle="Spend your time productively while waiting."
-            logoSrc="/smartqueue.png"
-          />
-                    </div>
+         <div className="mx-auto mt-10 w-full max-w-xl rounded-2xl bg-white p-6 shadow-sm">
+  <h2 className="mb-5 text-center text-2xl font-bold tracking-tight text-blue-900">
+    BENEFITS FOR STUDENTS
+  </h2>
+
+  <TitleBar
+    title="Real-Time Queue Monitoring"
+    subtitle="Check your queue status anytime, anywhere."
+    logoSrc="/clock.png"
+  />
+
+  <TitleBar
+    title="Turn Notifications"
+    subtitle="Get notified when your turn is approaching or it's your turn."
+    logoSrc="/bell.png"
+  />
+
+  <TitleBar
+    title="Estimated Waiting Time"
+    subtitle="Know the estimated waiting time before your turn."
+    logoSrc="/graph.png"
+  />
+
+  <TitleBar
+    title="More Convenience & Time Savings"
+    subtitle="Spend your time productively while waiting."
+    logoSrc="/like.png"
+  />
+</div>
         </header>
 
         <main className="mt-10 grid gap-5 sm:grid-cols-2">

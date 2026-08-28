@@ -1,40 +1,44 @@
+
+interface TitleBarProps {
+    title: string;
+    subtitle: string;
+    logoSrc: string;
+    logoAlt?: string;
+}
+
 import Image from "next/image";
 
-export type TitleBarProps = {
-  title: string;
-  subtitle: string;
-  logoSrc: string;
-  logoAlt?: string;
-  logoSize?: number;
-  className?: string;
-};
 
 export function TitleBar({
   title,
   subtitle,
   logoSrc,
   logoAlt = "",
-  logoSize = 128,
-  className = "",
 }: TitleBarProps) {
   return (
-    <div className={`flex items-center justify-between gap-4 ${className}`.trim()}>
-      <div className="flex min-w-0 items-center gap-3">
+    <div className="flex items-center gap-4 py-3">
+      
+      {/* Icon */}
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50">
         <Image
           src={logoSrc}
           alt={logoAlt}
-          width={logoSize}
-          height={logoSize}
-          className="shrink-0"
+          width={50}
+          height={50}
         />
       </div>
 
-      <div className="shrink-0 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-        <div className="truncate text-lg font-semibold text-blue-600 dark:text-blue-400">
-            {title}
-          </div>
-        {subtitle}
+      {/* Text */}
+      <div className="min-w-0 flex-1">
+        <div className="text-md font-bold text-blue-600 text-left">
+          {title}
+        </div>
+
+        <div className="mt-1 text-sm leading-4 text-zinc-600 text-left">
+          {subtitle}
+        </div>
       </div>
+
     </div>
   );
 }

@@ -31,6 +31,7 @@ export async function GET(req: Request) {
       studentName: appt.studentName,
       studentId: appt.studentId,
       studentNumber: appt.studentNumber,
+      school: appt.school,
       serviceType: appt.serviceType,
       status: appt.status,
       createdAt: appt.createdAt,
