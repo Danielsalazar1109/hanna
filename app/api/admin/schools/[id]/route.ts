@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminOr401 } from "@/lib/admin";
+import { requireSuperAdminOr403 } from "@/lib/admin";
 import { connectMongo } from "@/lib/mongodb";
 import { SchoolModel } from "@/lib/models/School";
 
@@ -9,8 +9,8 @@ export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdminOr401();
-  if (auth) return auth;
+  const auth = await requireSuperAdminOr403();
+  if (auth instanceof NextResponse) return auth;
 
   await connectMongo();
 
@@ -50,8 +50,8 @@ export async function DELETE(
   _req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdminOr401();
-  if (auth) return auth;
+  const auth = await requireSuperAdminOr403();
+  if (auth instanceof NextResponse) return auth;
 
   await connectMongo();
 

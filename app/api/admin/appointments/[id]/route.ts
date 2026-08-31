@@ -13,7 +13,8 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, { params }: Params) {
   const auth = await requireAdminOr401();
-  if (auth) return auth;
+  if (auth instanceof NextResponse) return auth;
+  const { admin } = auth;
 
   await connectMongo();
 
@@ -24,12 +25,17 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  if (!admin.isSuperAdmin && String(appointment.schoolId ?? "") !== admin.schoolId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   return NextResponse.json({ appointment });
 }
 
 export async function PATCH(req: Request, { params }: Params) {
   const auth = await requireAdminOr401();
-  if (auth) return auth;
+  if (auth instanceof NextResponse) return auth;
+  const { admin } = auth;
 
   await connectMongo();
 
@@ -45,6 +51,10 @@ export async function PATCH(req: Request, { params }: Params) {
 
   const appointment = await AppointmentModel.findById(id);
   if (!appointment) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (!admin.isSuperAdmin && String(appointment.schoolId ?? "") !== admin.schoolId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

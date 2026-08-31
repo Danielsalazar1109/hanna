@@ -33,7 +33,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid credentials." }, { status: 401 });
   }
 
-  const token = await signAdminToken(username);
+  const isSuperAdmin = Boolean((admin as { isSuperAdmin?: unknown }).isSuperAdmin);
+
+  const schoolId = admin.schoolId ? String(admin.schoolId) : "";
+  if (!isSuperAdmin && !schoolId) {
+    return NextResponse.json(
+      { error: "Admin is not assigned to a school." },
+      { status: 401 }
+    );
+  }
+
+  const token = await signAdminToken({
+    adminId: String(admin._id),
+    username: admin.username,
+    schoolId,
+    isSuperAdmin,
+  });
   const res = NextResponse.json({ ok: true });
 
   res.cookies.set({

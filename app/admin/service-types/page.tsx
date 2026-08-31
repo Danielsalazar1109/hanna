@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type ServiceTypeItem = {
@@ -20,6 +21,8 @@ function isErrorResponse(data: unknown): data is ErrorResponse {
 }
 
 export default function AdminServiceTypesPage() {
+  const router = useRouter();
+
   const [items, setItems] = useState<ServiceTypeItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,9 +121,23 @@ export default function AdminServiceTypesPage() {
   useEffect(() => {
     // Defer so we don't setState synchronously inside the effect body.
     queueMicrotask(() => {
-      void load();
+      fetch("/api/admin/me", { credentials: "include" })
+        .then((r) => r.json().catch(() => null))
+        .then((data: unknown) => {
+          const isSuperAdmin = Boolean(
+            (data as { isSuperAdmin?: unknown } | null)?.isSuperAdmin
+          );
+          if (!isSuperAdmin) {
+            router.replace("/admin/dashboard");
+            return;
+          }
+          void load();
+        })
+        .catch(() => {
+          router.replace("/admin/dashboard");
+        });
     });
-  }, []);
+  }, [router]);
 
   return (
     <div>

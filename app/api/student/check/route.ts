@@ -4,6 +4,21 @@ import { AppointmentModel } from "@/lib/models/Appointment";
 
 export const runtime = "nodejs";
 
+async function computeEstimate(args: {
+  schoolId: unknown;
+  serviceType: string;
+  createdAt: Date;
+}): Promise<{ queuePosition: number; estimatedWaitMinutes: number }> {
+  const queuePosition = await AppointmentModel.countDocuments({
+    schoolId: args.schoolId,
+    serviceType: args.serviceType,
+    status: "Scheduled",
+    createdAt: { $lte: args.createdAt },
+  });
+
+  return { queuePosition, estimatedWaitMinutes: queuePosition * 15 };
+}
+
 export async function GET(req: Request) {
   await connectMongo();
 
@@ -23,6 +38,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ appointment: null });
   }
 
+  const { queuePosition, estimatedWaitMinutes } = await computeEstimate({
+    schoolId: appt.schoolId,
+    serviceType: appt.serviceType,
+    createdAt: appt.createdAt,
+  });
+
   return NextResponse.json({
     appointment: {
       id: String(appt._id),
@@ -35,6 +56,8 @@ export async function GET(req: Request) {
       serviceType: appt.serviceType,
       status: appt.status,
       createdAt: appt.createdAt,
+      queuePosition,
+      estimatedWaitMinutes,
     },
   });
 }

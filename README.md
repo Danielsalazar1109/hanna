@@ -57,8 +57,28 @@ Create `hanna/.env.local` with these variables:
 
 - `MONGODB_URI`
 - `JWT_SECRET`
-- `ADMIN_USERNAME`
-- `ADMIN_PASSWORD_HASH`
+
+## Admin accounts (manual, per school)
+
+Admins are **stored in MongoDB** (collection `admins`) and each admin is linked to exactly one school via `schoolId`.
+
+### 1) Create a School
+
+Create at least one School document (collection `schools`). Example fields:
+
+- `name`: string
+- `enabled`: boolean
+- `sortOrder`: number
+
+You can do this from MongoDB Compass / shell. You’ll need the generated `_id`.
+
+### 2) Create an Admin linked to that school
+
+Create an Admin document in `admins` with:
+
+- `username`: string
+- `passwordHash`: bcrypt hash
+- `schoolId`: ObjectId pointing to the School `_id`
 
 > If you have a `.env.example`, you can copy it to `.env.local` and fill in values.
 

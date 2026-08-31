@@ -7,7 +7,8 @@ export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   const auth = await requireAdminOr401();
-  if (auth) return auth;
+  if (auth instanceof NextResponse) return auth;
+  const { admin } = auth;
 
   await connectMongo();
 
@@ -24,7 +25,9 @@ export async function GET(req: Request) {
   const limit = Math.min(200, Math.max(1, limitRaw));
   const skip = (page - 1) * limit;
 
-  const filter: Record<string, unknown> = {};
+  const filter: Record<string, unknown> = admin.isSuperAdmin
+    ? {}
+    : { schoolId: admin.schoolId };
 
   if (studentId) filter.studentId = studentId;
   if (ticketNumber) filter.ticketNumber = ticketNumber;

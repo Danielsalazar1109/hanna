@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminOr401 } from "@/lib/admin";
+import { requireSuperAdminOr403 } from "@/lib/admin";
 import { connectMongo } from "@/lib/mongodb";
 import { SchoolModel } from "@/lib/models/School";
 
@@ -33,8 +33,8 @@ function toDto(doc: {
 }
 
 export async function GET() {
-  const auth = await requireAdminOr401();
-  if (auth) return auth;
+  const auth = await requireSuperAdminOr403();
+  if (auth instanceof NextResponse) return auth;
 
   await connectMongo();
 
@@ -43,8 +43,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const auth = await requireAdminOr401();
-  if (auth) return auth;
+  const auth = await requireSuperAdminOr403();
+  if (auth instanceof NextResponse) return auth;
 
   await connectMongo();
 

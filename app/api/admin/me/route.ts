@@ -9,5 +9,10 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json({ username: admin.sub });
+  return NextResponse.json({
+    adminId: admin.sub,
+    username: admin.username,
+    schoolId: admin.schoolId,
+    isSuperAdmin: admin.isSuperAdmin,
+  });
 }

@@ -7,6 +7,21 @@ import { SchoolModel } from "@/lib/models/School";
 
 export const runtime = "nodejs";
 
+async function computeEstimate(args: {
+  schoolId: unknown;
+  serviceType: string;
+  createdAt: Date;
+}): Promise<{ queuePosition: number; estimatedWaitMinutes: number }> {
+  const queuePosition = await AppointmentModel.countDocuments({
+    schoolId: args.schoolId,
+    serviceType: args.serviceType,
+    status: "Scheduled",
+    createdAt: { $lte: args.createdAt },
+  });
+
+  return { queuePosition, estimatedWaitMinutes: queuePosition * 15 };
+}
+
 async function nextTicket(): Promise<{ ticketSeq: number; ticketNumber: string }> {
   const counter = await CounterModel.findOneAndUpdate(
     { _id: "appointment" },
@@ -76,6 +91,12 @@ export async function POST(req: Request) {
     .lean();
 
   if (existing) {
+    const { queuePosition, estimatedWaitMinutes } = await computeEstimate({
+      schoolId: existing.schoolId,
+      serviceType: existing.serviceType,
+      createdAt: existing.createdAt,
+    });
+
     return NextResponse.json({
       existing: true,
       appointment: {
@@ -89,6 +110,8 @@ export async function POST(req: Request) {
         serviceType: existing.serviceType,
         status: existing.status,
         createdAt: existing.createdAt,
+        queuePosition,
+        estimatedWaitMinutes,
       },
     });
   }
@@ -101,9 +124,16 @@ export async function POST(req: Request) {
     studentName,
     studentId,
     studentNumber,
+    schoolId: validSchool._id,
     school,
     serviceType,
     status: "Scheduled",
+  });
+
+  const { queuePosition, estimatedWaitMinutes } = await computeEstimate({
+    schoolId: appointment.schoolId,
+    serviceType: appointment.serviceType,
+    createdAt: appointment.createdAt,
   });
 
   return NextResponse.json({
@@ -119,6 +149,8 @@ export async function POST(req: Request) {
       serviceType: appointment.serviceType,
       status: appointment.status,
       createdAt: appointment.createdAt,
+      queuePosition,
+      estimatedWaitMinutes,
     },
   });
 }
