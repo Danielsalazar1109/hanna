@@ -86,7 +86,8 @@ export default function StudentQueueTicketPage() {
     if (step !== "confirmed" || !confirmation?.estimatedWaitMinutes) return;
 
     const totalSeconds = Math.max(0, Math.round(confirmation.estimatedWaitMinutes * 60));
-    const deadlineMs = Date.now() + totalSeconds * 1000;
+    const createdAtMs = new Date(confirmation.createdAt).getTime();
+    const deadlineMs = createdAtMs + totalSeconds * 1000;
 
     const tick = () => {
       const secs = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
@@ -115,6 +116,9 @@ export default function StudentQueueTicketPage() {
 
   const ticketHtml = useMemo(() => {
     if (!confirmation) return "";
+
+    const remainingMinutes =
+      typeof remainingSeconds === "number" ? Math.ceil(remainingSeconds / 60) : null;
 
     return `<!doctype html>
 <html lang="en">
@@ -146,13 +150,13 @@ export default function StudentQueueTicketPage() {
       typeof confirmation.queuePosition === "number" &&
       typeof confirmation.estimatedWaitMinutes === "number"
         ? `<div class="row"><span class="label">Queue position:</span> <span class="value">${confirmation.queuePosition}</span></div>
-           <div class="row"><span class="label">Estimated wait:</span> <span class="value">${confirmation.estimatedWaitMinutes} minutes</span></div>`
+           <div class="row"><span class="label">Estimated wait:</span> <span class="value">${remainingMinutes ?? confirmation.estimatedWaitMinutes} minutes</span></div>`
         : ""
     }
   </div>
 </body>
 </html>`;
-  }, [confirmation, isExisting, issuedAt]);
+  }, [confirmation, isExisting, issuedAt, remainingSeconds]);
 
   async function loadServiceTypes() {
     setServiceTypesError(null);
@@ -236,7 +240,15 @@ export default function StudentQueueTicketPage() {
         setConfirmation(data.appointment);
         setRemainingSeconds(
           typeof data.appointment.estimatedWaitMinutes === "number"
-            ? Math.round(data.appointment.estimatedWaitMinutes * 60)
+            ? Math.max(
+                0,
+                Math.ceil(
+                  (new Date(data.appointment.createdAt).getTime() +
+                    Math.round(data.appointment.estimatedWaitMinutes * 60) * 1000 -
+                    Date.now()) /
+                    1000
+                )
+              )
             : null
         );
         setStep("confirmed");
@@ -283,7 +295,15 @@ export default function StudentQueueTicketPage() {
       setConfirmation(data.appointment);
       setRemainingSeconds(
         typeof data.appointment.estimatedWaitMinutes === "number"
-          ? Math.round(data.appointment.estimatedWaitMinutes * 60)
+          ? Math.max(
+              0,
+              Math.ceil(
+                (new Date(data.appointment.createdAt).getTime() +
+                  Math.round(data.appointment.estimatedWaitMinutes * 60) * 1000 -
+                  Date.now()) /
+                  1000
+              )
+            )
           : null
       );
       setStep("confirmed");
@@ -306,6 +326,14 @@ export default function StudentQueueTicketPage() {
       estimatedWaitMinutes !== null
         ? formatHms(remainingSeconds ?? Math.round(estimatedWaitMinutes * 60))
         : "";
+
+    const remainingMinutes =
+      estimatedWaitMinutes !== null
+        ? Math.max(
+            0,
+            Math.ceil((remainingSeconds ?? Math.round(estimatedWaitMinutes * 60)) / 60)
+          )
+        : null;
 
     return (
       <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-12 dark:bg-black">
@@ -381,7 +409,7 @@ export default function StudentQueueTicketPage() {
                   <div className="flex items-start justify-between gap-6">
                     <dt className="text-sm text-zinc-600 dark:text-zinc-400">Estimated wait</dt>
                     <dd className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                      {estimatedWaitMinutes} minutes
+                      {remainingMinutes} minutes
                     </dd>
                   </div>
                   <div className="flex items-start justify-between gap-6">
