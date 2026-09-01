@@ -17,6 +17,7 @@ type AppointmentDto = {
   createdAt: string;
   queuePosition?: number;
   estimatedWaitMinutes?: number;
+  etaUntil?: string;
 };
 
 type CheckResponse = { appointment: AppointmentDto | null };
@@ -77,17 +78,31 @@ export default function StudentQueueTicketPage() {
 
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
 
+  function deadlineMsFrom(appt: AppointmentDto): number | null {
+    if (appt.etaUntil) {
+      const ms = new Date(appt.etaUntil).getTime();
+      if (!Number.isNaN(ms)) return ms;
+    }
+
+    if (typeof appt.estimatedWaitMinutes === "number") {
+      const createdAtMs = new Date(appt.createdAt).getTime();
+      if (Number.isNaN(createdAtMs)) return null;
+      return createdAtMs + Math.round(appt.estimatedWaitMinutes * 60) * 1000;
+    }
+
+    return null;
+  }
+
   const issuedAt = useMemo(() => {
     if (!confirmation) return "";
     return formatDateTime(confirmation.createdAt);
   }, [confirmation]);
 
   useEffect(() => {
-    if (step !== "confirmed" || !confirmation?.estimatedWaitMinutes) return;
+    if (step !== "confirmed" || !confirmation) return;
 
-    const totalSeconds = Math.max(0, Math.round(confirmation.estimatedWaitMinutes * 60));
-    const createdAtMs = new Date(confirmation.createdAt).getTime();
-    const deadlineMs = createdAtMs + totalSeconds * 1000;
+    const deadlineMs = deadlineMsFrom(confirmation);
+    if (!deadlineMs) return;
 
     const tick = () => {
       const secs = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
@@ -96,7 +111,73 @@ export default function StudentQueueTicketPage() {
 
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [step, confirmation?.id, confirmation?.estimatedWaitMinutes]);
+  }, [step, confirmation?.id, confirmation?.estimatedWaitMinutes, confirmation?.etaUntil]);
+
+  useEffect(() => {
+    if (step !== "confirmed" || !confirmation?.studentId) return;
+
+    if (typeof window !== "undefined" && typeof EventSource !== "undefined") {
+      const studentIdForStream = confirmation.studentId;
+      const es = new EventSource(
+        `/api/student/stream?studentId=${encodeURIComponent(studentIdForStream)}`
+      );
+
+      es.addEventListener("appointment", (evt) => {
+        const raw = (evt as MessageEvent).data;
+        if (!raw) return;
+
+        const appt = JSON.parse(raw) as AppointmentDto | null;
+        if (!appt) return;
+
+        setIsExisting(true);
+        setConfirmation(appt);
+
+        const deadlineMs = deadlineMsFrom(appt);
+        if (!deadlineMs) return;
+        setRemainingSeconds(Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000)));
+      });
+
+      // If SSE is available, prefer it over polling.
+      return () => {
+        es.close();
+      };
+    }
+
+    const studentIdForPoll = confirmation.studentId;
+
+    const poll = async () => {
+      const res = await fetch(
+        `/api/student/check?studentId=${encodeURIComponent(studentIdForPoll)}`,
+        { credentials: "include" }
+      );
+
+      const data = (await res.json().catch(() => null)) as
+        | CheckResponse
+        | { error: string }
+        | null;
+
+      if (!res.ok || !data || "error" in data) return;
+      if (!data.appointment) return;
+
+      setIsExisting(true);
+      setConfirmation(data.appointment);
+
+      const deadlineMs = deadlineMsFrom(data.appointment);
+      if (!deadlineMs) return;
+      setRemainingSeconds(Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000)));
+    };
+
+    // Run once immediately (async) then keep polling.
+    queueMicrotask(() => {
+      void poll();
+    });
+
+    const id = window.setInterval(() => {
+      void poll();
+    }, 10_000);
+
+    return () => window.clearInterval(id);
+  }, [step, confirmation?.studentId]);
 
   const titleByStep: Record<Step, string> = {
     studentId: "Enter your Student ID",
@@ -239,17 +320,11 @@ export default function StudentQueueTicketPage() {
         setIsExisting(true);
         setConfirmation(data.appointment);
         setRemainingSeconds(
-          typeof data.appointment.estimatedWaitMinutes === "number"
-            ? Math.max(
-                0,
-                Math.ceil(
-                  (new Date(data.appointment.createdAt).getTime() +
-                    Math.round(data.appointment.estimatedWaitMinutes * 60) * 1000 -
-                    Date.now()) /
-                    1000
-                )
-              )
-            : null
+          (() => {
+            const deadlineMs = deadlineMsFrom(data.appointment);
+            if (!deadlineMs) return null;
+            return Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+          })()
         );
         setStep("confirmed");
         return;
@@ -294,17 +369,11 @@ export default function StudentQueueTicketPage() {
       setIsExisting(data.existing);
       setConfirmation(data.appointment);
       setRemainingSeconds(
-        typeof data.appointment.estimatedWaitMinutes === "number"
-          ? Math.max(
-              0,
-              Math.ceil(
-                (new Date(data.appointment.createdAt).getTime() +
-                  Math.round(data.appointment.estimatedWaitMinutes * 60) * 1000 -
-                  Date.now()) /
-                  1000
-              )
-            )
-          : null
+        (() => {
+          const deadlineMs = deadlineMsFrom(data.appointment);
+          if (!deadlineMs) return null;
+          return Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+        })()
       );
       setStep("confirmed");
     } catch (err) {

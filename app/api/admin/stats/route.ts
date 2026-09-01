@@ -13,7 +13,7 @@ function todayRange() {
   return { start, end };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const auth = await requireAdminOr401();
   if (auth instanceof NextResponse) return auth;
   const { admin } = auth;
@@ -22,7 +22,13 @@ export async function GET() {
 
   const { start, end } = todayRange();
 
-  const baseFilter = admin.isSuperAdmin ? {} : { schoolId: admin.schoolId };
+  const { searchParams } = new URL(req.url);
+  const serviceType = (searchParams.get("serviceType") ?? "").trim();
+
+  const baseFilter: Record<string, unknown> = admin.isSuperAdmin
+    ? {}
+    : { schoolId: admin.schoolId };
+  if (serviceType) baseFilter.serviceType = serviceType;
 
   const [
     totalAppointments,

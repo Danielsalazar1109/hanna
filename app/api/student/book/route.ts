@@ -7,6 +7,10 @@ import { SchoolModel } from "@/lib/models/School";
 
 export const runtime = "nodejs";
 
+function etaUntilFrom(args: { createdAt: Date; estimatedWaitMinutes: number }): Date {
+  return new Date(args.createdAt.getTime() + args.estimatedWaitMinutes * 60 * 1000);
+}
+
 async function computeEstimate(args: {
   schoolId: unknown;
   serviceType: string;
@@ -22,15 +26,34 @@ async function computeEstimate(args: {
   return { queuePosition, estimatedWaitMinutes: queuePosition * 15 };
 }
 
-async function nextTicket(): Promise<{ ticketSeq: number; ticketNumber: string }> {
+function serviceInitial(serviceType: string): string {
+  const trimmed = serviceType.trim();
+  const first = trimmed[0] ?? "T";
+  return first.toUpperCase();
+}
+
+function counterKey(args: { schoolId: unknown; serviceType: string }): string {
+  const schoolIdStr = String(args.schoolId);
+  const normalizedService = args.serviceType
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return `appointment:${schoolIdStr}:${normalizedService}`;
+}
+
+async function nextTicket(args: {
+  schoolId: unknown;
+  serviceType: string;
+}): Promise<{ ticketSeq: number; ticketNumber: string }> {
   const counter = await CounterModel.findOneAndUpdate(
-    { _id: "appointment" },
+    { _id: counterKey(args) },
     { $inc: { seq: 1 } },
     { new: true, upsert: true }
   );
 
   const ticketSeq = counter.seq;
-  const ticketNumber = `A-${ticketSeq}`;
+  const ticketNumber = `${serviceInitial(args.serviceType)}-${ticketSeq}`;
 
   return { ticketSeq, ticketNumber };
 }
@@ -97,6 +120,11 @@ export async function POST(req: Request) {
       createdAt: existing.createdAt,
     });
 
+    const etaUntil =
+      (existing as { etaUntil?: unknown }).etaUntil instanceof Date
+        ? ((existing as { etaUntil: Date }).etaUntil as Date)
+        : etaUntilFrom({ createdAt: existing.createdAt, estimatedWaitMinutes });
+
     return NextResponse.json({
       existing: true,
       appointment: {
@@ -112,11 +140,15 @@ export async function POST(req: Request) {
         createdAt: existing.createdAt,
         queuePosition,
         estimatedWaitMinutes,
+        etaUntil,
       },
     });
   }
 
-  const { ticketSeq, ticketNumber } = await nextTicket();
+  const { ticketSeq, ticketNumber } = await nextTicket({
+    schoolId: validSchool._id,
+    serviceType,
+  });
 
   const appointment = await AppointmentModel.create({
     ticketSeq,
@@ -136,6 +168,14 @@ export async function POST(req: Request) {
     createdAt: appointment.createdAt,
   });
 
+  const etaUntil = etaUntilFrom({
+    createdAt: appointment.createdAt,
+    estimatedWaitMinutes,
+  });
+
+  appointment.etaUntil = etaUntil;
+  await appointment.save();
+
   return NextResponse.json({
     existing: false,
     appointment: {
@@ -151,6 +191,7 @@ export async function POST(req: Request) {
       createdAt: appointment.createdAt,
       queuePosition,
       estimatedWaitMinutes,
+      etaUntil,
     },
   });
 }

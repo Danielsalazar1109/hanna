@@ -4,6 +4,10 @@ import { AppointmentModel } from "@/lib/models/Appointment";
 
 export const runtime = "nodejs";
 
+function etaUntilFrom(args: { createdAt: Date; estimatedWaitMinutes: number }): Date {
+  return new Date(args.createdAt.getTime() + args.estimatedWaitMinutes * 60 * 1000);
+}
+
 async function computeEstimate(args: {
   schoolId: unknown;
   serviceType: string;
@@ -44,6 +48,11 @@ export async function GET(req: Request) {
     createdAt: appt.createdAt,
   });
 
+  const etaUntil =
+    (appt as { etaUntil?: unknown }).etaUntil instanceof Date
+      ? ((appt as { etaUntil: Date }).etaUntil as Date)
+      : etaUntilFrom({ createdAt: appt.createdAt, estimatedWaitMinutes });
+
   return NextResponse.json({
     appointment: {
       id: String(appt._id),
@@ -58,6 +67,7 @@ export async function GET(req: Request) {
       createdAt: appt.createdAt,
       queuePosition,
       estimatedWaitMinutes,
+      etaUntil,
     },
   });
 }

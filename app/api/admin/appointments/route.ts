@@ -17,6 +17,7 @@ export async function GET(req: Request) {
   const q = (searchParams.get("q") ?? "").trim();
   const studentId = (searchParams.get("studentId") ?? "").trim();
   const ticketNumber = (searchParams.get("ticketNumber") ?? "").trim();
+  const serviceTypeParam = (searchParams.get("serviceType") ?? "").trim();
   const status = (searchParams.get("status") ?? "").trim();
   const date = (searchParams.get("date") ?? "").trim(); // YYYY-MM-DD (filter by createdAt)
 
@@ -31,6 +32,7 @@ export async function GET(req: Request) {
 
   if (studentId) filter.studentId = studentId;
   if (ticketNumber) filter.ticketNumber = ticketNumber;
+  if (serviceTypeParam) filter.serviceType = serviceTypeParam;
   if (status && (APPOINTMENT_STATUSES as readonly string[]).includes(status)) {
     filter.status = status;
   }
@@ -50,7 +52,7 @@ export async function GET(req: Request) {
     ];
   }
 
-  const [items, total] = await Promise.all([
+  const [rawItems, total] = await Promise.all([
     AppointmentModel.find(filter)
       .sort({ ticketSeq: 1 })
       .skip(skip)
@@ -58,6 +60,39 @@ export async function GET(req: Request) {
       .lean(),
     AppointmentModel.countDocuments(filter),
   ]);
+
+  const items = await Promise.all(
+    rawItems.map(async (a) => {
+      const status = String((a as { status?: unknown }).status ?? "");
+      if (status !== "Scheduled") return a;
+
+      const etaUntil = (a as { etaUntil?: unknown }).etaUntil;
+      if (etaUntil instanceof Date) return a;
+
+      const schoolId = (a as { schoolId?: unknown }).schoolId;
+      const serviceType = String((a as { serviceType?: unknown }).serviceType ?? "");
+      const createdAt = (a as { createdAt?: unknown }).createdAt;
+
+      if (!schoolId || !serviceType || !(createdAt instanceof Date)) return a;
+
+      const queuePosition = await AppointmentModel.countDocuments({
+        schoolId,
+        serviceType,
+        status: "Scheduled",
+        createdAt: { $lte: createdAt },
+      });
+
+      const estimatedWaitMinutes = queuePosition * 15;
+      const derivedEtaUntil = new Date(createdAt.getTime() + estimatedWaitMinutes * 60 * 1000);
+
+      return {
+        ...a,
+        queuePosition,
+        estimatedWaitMinutes,
+        etaUntil: derivedEtaUntil,
+      };
+    })
+  );
 
   return NextResponse.json({ items, total, page, limit });
 }

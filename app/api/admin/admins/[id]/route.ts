@@ -15,21 +15,42 @@ type AdminDto = {
   updatedAt: string;
 };
 
+function toIsoDate(input: unknown): string | null {
+  if (input instanceof Date && !Number.isNaN(input.getTime())) {
+    return input.toISOString();
+  }
+
+  if (typeof input === "string") {
+    const d = new Date(input);
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+
+  return null;
+}
+
 function toDto(doc: {
   _id: unknown;
   username: string;
   schoolId?: unknown;
   isSuperAdmin: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: unknown;
+  updatedAt?: unknown;
 }): AdminDto {
+  const id = doc._id as { getTimestamp?: () => Date } | null;
+  const fromObjectId = typeof id?.getTimestamp === "function" ? id.getTimestamp() : null;
+
+  const createdAt =
+    toIsoDate(doc.createdAt) ??
+    (fromObjectId ? fromObjectId.toISOString() : new Date(0).toISOString());
+  const updatedAt = toIsoDate(doc.updatedAt) ?? createdAt;
+
   return {
     id: String(doc._id),
     username: doc.username,
     schoolId: doc.schoolId ? String(doc.schoolId) : "",
     isSuperAdmin: Boolean(doc.isSuperAdmin),
-    createdAt: doc.createdAt.toISOString(),
-    updatedAt: doc.updatedAt.toISOString(),
+    createdAt,
+    updatedAt,
   };
 }
 

@@ -25,17 +25,24 @@ const AppointmentSchema = new mongoose.Schema(
       enum: APPOINTMENT_STATUSES,
       default: "Scheduled",
     },
+    // Estimated time when the appointment will be served (admin-adjustable).
+    etaUntil: { type: Date, required: false },
   },
   { timestamps: true }
 );
 
 AppointmentSchema.index({ studentId: 1 });
-AppointmentSchema.index({ ticketNumber: 1 }, { unique: true });
+AppointmentSchema.index({ ticketNumber: 1 });
+AppointmentSchema.index(
+  { schoolId: 1, serviceType: 1, ticketSeq: 1 },
+  { unique: true }
+);
 AppointmentSchema.index({ ticketSeq: 1 });
 AppointmentSchema.index({ status: 1 });
 AppointmentSchema.index({ serviceType: 1 });
 AppointmentSchema.index({ school: 1 });
 AppointmentSchema.index({ schoolId: 1 });
+AppointmentSchema.index({ etaUntil: 1 });
 
 export type AppointmentDoc = InferSchemaType<typeof AppointmentSchema> & {
   _id: Types.ObjectId;

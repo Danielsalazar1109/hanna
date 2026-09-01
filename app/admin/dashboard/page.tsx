@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+type ServiceTypeItem = { id: string; name: string; sortOrder: number };
+
 type Appointment = {
   _id: string;
   ticketSeq: number;
@@ -14,6 +16,9 @@ type Appointment = {
   serviceType?: string;
   status: "Scheduled" | "Completed" | "Cancelled" | "No Show";
   createdAt: string;
+  etaUntil?: string;
+  queuePosition?: number;
+  estimatedWaitMinutes?: number;
 };
 
 type ErrorResponse = { error: string };
@@ -75,7 +80,13 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 export default function AdminDashboardPage() {
   const router = useRouter();
 
+  const [nowMs, setNowMs] = useState<number | null>(null);
+  const [etaEdits, setEtaEdits] = useState<Record<string, string>>({});
+
   const [stats, setStats] = useState<StatsResponse | null>(null);
+
+  const [serviceTypes, setServiceTypes] = useState<ServiceTypeItem[]>([]);
+  const [serviceTypesError, setServiceTypesError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState({
     q: "",
@@ -83,7 +94,7 @@ export default function AdminDashboardPage() {
     status: "",
     studentId: "",
     ticketNumber: "",
-
+    serviceType: "",
   });
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -97,16 +108,60 @@ export default function AdminDashboardPage() {
     if (filters.status) p.set("status", filters.status);
     if (filters.studentId) p.set("studentId", filters.studentId);
     if (filters.ticketNumber) p.set("ticketNumber", filters.ticketNumber);
+    if (filters.serviceType) p.set("serviceType", filters.serviceType);
     return p.toString();
   }, [filters]);
 
+  function remainingSecondsFor(a: Appointment): number | null {
+    if (nowMs === null) return null;
+    if (!a.etaUntil) return null;
+    const etaMs = new Date(a.etaUntil).getTime();
+    return Math.max(0, Math.ceil((etaMs - nowMs) / 1000));
+  }
+
+  function remainingMinutesFor(a: Appointment): number | null {
+    const secs = remainingSecondsFor(a);
+    if (secs === null) return null;
+    return Math.max(0, Math.ceil(secs / 60));
+  }
+
   async function loadStats() {
-    const res = await fetch("/api/admin/stats", { credentials: "include" });
+    const p = new URLSearchParams();
+    if (filters.serviceType) p.set("serviceType", filters.serviceType);
+
+    const res = await fetch(`/api/admin/stats?${p.toString()}`, {
+      credentials: "include",
+    });
     const data = (await res.json().catch(() => null)) as unknown;
     if (!res.ok) {
       throw new Error(isErrorResponse(data) ? data.error : "Failed to load stats.");
     }
     setStats(data as StatsResponse);
+  }
+
+  async function loadServiceTypes() {
+    setServiceTypesError(null);
+
+    try {
+      const res = await fetch("/api/student/service-types");
+      const data = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        throw new Error(
+          isErrorResponse(data) ? data.error : "Failed to load service types."
+        );
+      }
+
+      const items = (data as { items?: unknown } | null)?.items;
+      const list = Array.isArray(items) ? (items as ServiceTypeItem[]) : [];
+      setServiceTypes(list);
+
+      // Default to first service type (mini-dashboard model).
+      if (!filters.serviceType && list[0]?.name) {
+        setFilters((f) => ({ ...f, serviceType: list[0]!.name }));
+      }
+    } catch (e) {
+      setServiceTypesError(String(e));
+    }
   }
 
   async function loadAppointments() {
@@ -144,14 +199,41 @@ export default function AdminDashboardPage() {
     await Promise.all([loadAppointments(), loadStats()]).catch(() => {});
   }
 
+  async function updateAppointmentEta(id: string, minutesRemaining: number) {
+    await fetch(`/api/admin/appointments/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ etaMinutesRemaining: minutesRemaining }),
+      credentials: "include",
+    });
+
+    await loadAppointments().catch(() => {});
+  }
+
   async function logout() {
     await fetch("/api/admin/logout", { method: "POST" });
     router.push("/");
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load
+    // Load service types once on mount.
+    queueMicrotask(() => {
+      void loadServiceTypes();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial + serviceType refresh
     loadStats().catch(() => {});
+  }, [filters.serviceType]);
+
+  useEffect(() => {
+    // Keep a ticking "now" for remaining time rendering.
+    const tick = () => setNowMs(Date.now());
+    queueMicrotask(tick);
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -160,15 +242,54 @@ export default function AdminDashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appointmentQuery]);
 
+
+
   return (
-    <div>
+    <div className="flex flex-col gap-6 lg:flex-row">
+      <aside className="w-full lg:w-60">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Service Types
+          </div>
+
+          {serviceTypesError ? (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {serviceTypesError}
+            </div>
+          ) : null}
+
+          <div className="mt-3 grid gap-2">
+            {serviceTypes.map((t) => {
+              const selected = filters.serviceType === t.name;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setFilters((f) => ({ ...f, serviceType: t.name }))}
+                  className={`w-full rounded-xl border px-3 py-2 text-left text-sm font-semibold transition ${
+                    selected
+                      ? "border-blue-700 bg-blue-50 text-blue-900 dark:border-blue-400 dark:bg-blue-950/40 dark:text-blue-200"
+                      : "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                  }`}
+                >
+                  {t.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </aside>
+
+      <div className="flex-1">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
             Admin queue dashboard
           </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Students are served in ticket order.
+            {filters.serviceType
+              ? `Showing: ${filters.serviceType} • Students are served in ticket order.`
+              : "Students are served in ticket order."}
           </p>
         </div>
         <button
@@ -260,6 +381,9 @@ export default function AdminDashboardPage() {
                   Issued
                 </th>
                 <th className="border-b border-zinc-200 py-3 pr-3 dark:border-zinc-800">
+                  ETA left
+                </th>
+                <th className="border-b border-zinc-200 py-3 pr-3 dark:border-zinc-800">
                   Status
                 </th>
                 <th className="border-b border-zinc-200 py-3 dark:border-zinc-800">
@@ -271,7 +395,7 @@ export default function AdminDashboardPage() {
               {appointmentsLoading ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="py-6 text-sm text-zinc-600 dark:text-zinc-400"
                   >
                     Loading…
@@ -300,6 +424,40 @@ export default function AdminDashboardPage() {
                     </td>
                     <td className="border-b border-zinc-100 py-3 pr-3 dark:border-zinc-900">
                       {formatDateTime(a.createdAt)}
+                    </td>
+                    <td className="border-b border-zinc-100 py-3 pr-3 dark:border-zinc-900">
+                      {(() => {
+                        const mins = remainingMinutesFor(a);
+                        const value = etaEdits[a._id] ?? (mins === null ? "" : String(mins));
+                        return (
+                          <div className="flex items-center gap-2">
+                            <span className="tabular-nums text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                              {mins === null ? "—" : `${mins}m`}
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={value}
+                              onChange={(e) =>
+                                setEtaEdits((m) => ({ ...m, [a._id]: e.target.value }))
+                              }
+                              className="h-9 w-20 rounded-lg border border-zinc-200 bg-white px-2 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const n = Number(etaEdits[a._id]);
+                                if (Number.isFinite(n)) {
+                                  void updateAppointmentEta(a._id, n);
+                                }
+                              }}
+                              className="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                            >
+                              Set
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="border-b border-zinc-100 py-3 pr-3 dark:border-zinc-900">
                       <select
@@ -334,7 +492,7 @@ export default function AdminDashboardPage() {
               ) : (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="py-6 text-sm text-zinc-600 dark:text-zinc-400"
                   >
                     No tickets found.
@@ -345,6 +503,7 @@ export default function AdminDashboardPage() {
           </table>
         </div>
       </section>
+      </div>
     </div>
   );
 }
