@@ -218,13 +218,75 @@ export default function AdminAdminsPage() {
             type="button"
             onClick={create}
             disabled={loading}
-            className="inline-flex h-10 items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
           >
             Add admin
           </button>
         </div>
 
-        <div className="mt-6 overflow-x-auto">
+        <div className="mt-6">
+          {/* Mobile: cards */}
+          <div className="grid gap-3 sm:hidden">
+            {items.map((a) => (
+              <div
+                key={a.id}
+                className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                      {a.username}
+                    </div>
+                    <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                      {a.isSuperAdmin ? "Super admin" : "School admin"}
+                    </div>
+                    <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+                      Created: {new Date(a.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+
+                  {!a.isSuperAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => void remove(a.id)}
+                      className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950"
+                    >
+                      Delete
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="mt-4">
+                  {a.isSuperAdmin ? (
+                    <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                      School: <span className="font-semibold">(all)</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={a.schoolId}
+                      onChange={(e) => void patch(a.id, { schoolId: e.target.value })}
+                      className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-2 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+                    >
+                      {schools.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {!items.length ? (
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
+                No admins yet.
+              </div>
+            ) : null}
+          </div>
+
+          {/* Desktop/tablet: table */}
+          <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[900px] border-separate border-spacing-0">
             <thead>
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -289,6 +351,7 @@ export default function AdminAdminsPage() {
               ) : null}
             </tbody>
           </table>
+          </div>
         </div>
       </section>
     </div>

@@ -171,13 +171,94 @@ export default function AdminSchoolsPage() {
           <button
             type="button"
             onClick={create}
-            className="inline-flex h-10 items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-500"
           >
             Add
           </button>
         </div>
 
-        <div className="mt-6 overflow-x-auto">
+        <div className="mt-6">
+          {/* Mobile: cards */}
+          <div className="grid gap-3 sm:hidden">
+            {loading ? (
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
+                Loading…
+              </div>
+            ) : items.length ? (
+              items.map((it) => (
+                <div
+                  key={it.id}
+                  className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+                >
+                  <div className="grid gap-3">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Name
+                      </div>
+                      <input
+                        defaultValue={it.name}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          if (v && v !== it.name) void patch(it.id, { name: v });
+                        }}
+                        className="mt-1 h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                          Sort
+                        </div>
+                        <input
+                          defaultValue={String(it.sortOrder)}
+                          inputMode="numeric"
+                          onBlur={(e) => {
+                            const v = Number(e.target.value);
+                            if (Number.isFinite(v) && v !== it.sortOrder) {
+                              void patch(it.id, { sortOrder: v });
+                            }
+                          }}
+                          className="mt-1 h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+                        />
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                          Enabled
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void patch(it.id, { enabled: !it.enabled })}
+                          className={`mt-1 inline-flex h-10 w-full items-center justify-center rounded-lg px-3 text-sm font-semibold ${
+                            it.enabled
+                              ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                              : "border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                          }`}
+                        >
+                          {it.enabled ? "Enabled" : "Disabled"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void remove(it.id)}
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
+                No schools yet.
+              </div>
+            )}
+          </div>
+
+          {/* Desktop/tablet: table */}
+          <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[700px] border-separate border-spacing-0">
             <thead>
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -261,6 +342,7 @@ export default function AdminSchoolsPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </section>
     </div>
