@@ -52,10 +52,32 @@ function serviceSlug(serviceType: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-function schoolCode(schoolId: unknown): string {
-  const raw = String(schoolId ?? "").trim();
-  const suffix = raw.slice(-4);
-  return (suffix || "SCH").toUpperCase();
+function idSuffix(id: unknown, len: number): string {
+  const raw = String(id ?? "").trim();
+  return raw.slice(-len).toUpperCase();
+}
+
+function acronymFromName(name: string, maxLen: number): string {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .map((p) => p.replace(/[^a-z0-9]/gi, ""))
+    .filter(Boolean);
+
+  const stop = new Set(["of", "the", "and"]);
+  const meaningful = parts.filter((p) => !stop.has(p.toLowerCase()));
+
+  const letters = meaningful.map((p) => p[0]!).join("").toUpperCase();
+  if (letters.length >= 2) return letters.slice(0, maxLen);
+
+  const compact = meaningful.join("").toUpperCase();
+  return (compact || "SCH").slice(0, maxLen);
+}
+
+function schoolTag(args: { schoolId: unknown; schoolName: string }): string {
+  const acro = acronymFromName(args.schoolName, 4);
+  const suf = idSuffix(args.schoolId, 2) || "00";
+  return `${acro}${suf}`;
 }
 
 function counterKey(args: { schoolId: unknown; serviceType: string }): string {
@@ -75,10 +97,12 @@ async function nextTicket(args: {
   );
 
   const ticketSeq = counter.seq;
-  // ticketNumber must be globally unique (DB may enforce unique index on ticketNumber).
-  // Previously it was based on only the first letter of service type (e.g. "C-11"), which
-  // collides across different service types that share the same initial.
-  const ticketNumber = `${schoolCode(args.schoolId)}-${serviceSlug(args.serviceType)}-${ticketSeq}`;
+  // ticketNumber is scoped per school. DB uniqueness is enforced via a compound index
+  // (schoolId + ticketNumber) so the same ticketNumber can exist in different schools.
+  // Business rule: tickets are scoped per school, so short codes like "C-1" are OK across schools.
+  // Uniqueness will be enforced via a compound index (schoolId + ticketNumber).
+  const serviceTag = acronymFromName(args.serviceType, 1);
+  const ticketNumber = `${serviceTag}-${ticketSeq}`;
 
   return { ticketSeq, ticketNumber };
 }

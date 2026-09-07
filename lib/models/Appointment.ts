@@ -33,6 +33,8 @@ const AppointmentSchema = new mongoose.Schema(
 
 AppointmentSchema.index({ studentId: 1 });
 AppointmentSchema.index({ ticketNumber: 1 });
+// Tickets are unique per school (NOT globally). This enables e.g. "C-1" in two different schools.
+AppointmentSchema.index({ schoolId: 1, ticketNumber: 1 }, { unique: true });
 AppointmentSchema.index(
   { schoolId: 1, serviceType: 1, ticketSeq: 1 },
   { unique: true }
