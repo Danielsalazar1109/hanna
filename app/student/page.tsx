@@ -72,12 +72,12 @@ function isPlausiblePhone(raw: string): boolean {
 }
 
 
-type Step = "studentId" | "namePhone" | "school" | "service" | "confirmed";
+type Step = "school" | "studentId" | "namePhone" | "service" | "confirmed";
 
 export default function StudentQueueTicketPage() {
   const router = useRouter();
 
-  const [step, setStep] = useState<Step>("studentId");
+  const [step, setStep] = useState<Step>("school");
 
   const [studentId, setStudentId] = useState("");
   const [studentName, setStudentName] = useState("");
@@ -285,17 +285,17 @@ export default function StudentQueueTicketPage() {
   }, [step, confirmation?.studentId]);
 
   const titleByStep: Record<Step, string> = {
+    school: "Select School",
     studentId: "Enter your Student ID",
     namePhone: "Enter your information",
-    school: "Select School",
     service: "Select Service Type",
     confirmed: "Ticket Confirmed",
   };
 
   const subtitleByStep: Record<Step, string> = {
+    school: "Select your school from the following list.",
     studentId: "Please provide your Student ID.",
     namePhone: "Please provide your name and phone number.",
-    school: "Select your school from the following list.",
     service: "Select the service type you need.",
     confirmed: "",
   };
@@ -532,6 +532,17 @@ export default function StudentQueueTicketPage() {
                   <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
                     Ticket number
                   </div>
+
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50">
+                School: <span className="font-semibold">{schools.find((s) => s.id === schoolId)?.name ?? ""}</span>
+                <button
+                  type="button"
+                  onClick={() => setStep("school")}
+                  className="ml-3 text-sm font-semibold text-zinc-700 underline underline-offset-2 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
+                >
+                  Edit
+                </button>
+              </div>
                   <div className="mt-2 text-6xl font-bold text-blue-900">
                     {confirmation.ticketNumber}
                   </div>
@@ -704,6 +715,20 @@ export default function StudentQueueTicketPage() {
 
           {step === "studentId" ? (
             <form className="mt-6 grid gap-5" onSubmit={lookup}>
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50">
+                School:{" "}
+                <span className="font-semibold">
+                  {schools.find((s) => s.id === schoolId)?.name ?? "(not selected)"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setStep("school")}
+                  className="ml-3 text-sm font-semibold text-zinc-700 underline underline-offset-2 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
+                >
+                  Edit
+                </button>
+              </div>
+
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
                   Student ID
@@ -716,14 +741,23 @@ export default function StudentQueueTicketPage() {
                 />
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-800 px-5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-                >
-                  {submitting ? "Checking…" : "Continue"}
-                </button>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-row gap-3 mx-auto">
+                  <button
+                    type="button"
+                    onClick={() => setStep("school")}
+                    className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-10 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting || !schoolId}
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-800 px-10 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                  >
+                    {submitting ? "Checking…" : "Continue"}
+                  </button>
+                </div>
                 <Image src="/form.png" className="mx-auto" alt="Logo" width={400} height={50} />
               </div>
             </form>
@@ -734,7 +768,7 @@ export default function StudentQueueTicketPage() {
               className="mt-6 grid gap-5"
               onSubmit={(e) => {
                 e.preventDefault();
-                setStep("school");
+                setStep("service");
               }}
             >
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50">
@@ -806,13 +840,9 @@ export default function StudentQueueTicketPage() {
               className="mt-6 grid gap-5"
               onSubmit={(e) => {
                 e.preventDefault();
-                setStep("service");
+                setStep("studentId");
               }}
             >
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50">
-                Student ID: <span className="font-semibold">{studentId.trim()}</span>
-              </div>
-
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
                   School
@@ -855,21 +885,14 @@ export default function StudentQueueTicketPage() {
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                 <div className="flex flex-row gap-3 mx-auto">
-                <button
-                  type="button"
-                  onClick={() => setStep("namePhone")}
-                  className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-10 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
-                >
-                  Back
-                </button>
-                <button
-                  type="submit"
-                  disabled={!schoolId || submitting || !schools.length}
-                  className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-800 px-10 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-                >
-                  Get Queue Number
-                </button>
+                <div className="flex flex-row gap-3 mx-auto">
+                  <button
+                    type="submit"
+                    disabled={!schoolId || submitting || !schools.length}
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-800 px-10 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                  >
+                    Continue
+                  </button>
                 </div>
               </div>
             </form>
@@ -879,6 +902,10 @@ export default function StudentQueueTicketPage() {
             <form className="mt-6 grid gap-5" onSubmit={book}>
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50">
                 Student ID: <span className="font-semibold">{studentId.trim()}</span>
+              </div>
+
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50">
+                School: <span className="font-semibold">{schools.find((s) => s.id === schoolId)?.name ?? ""}</span>
               </div>
 
               <div className="grid gap-2">
@@ -926,7 +953,7 @@ export default function StudentQueueTicketPage() {
                  <div className="flex flex-row gap-3 mx-auto">
                 <button
                   type="button"
-                  onClick={() => setStep("school")}
+                  onClick={() => setStep("namePhone")}
                   className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-10 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
                 >
                   Back
