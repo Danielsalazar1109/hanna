@@ -94,6 +94,8 @@ export default function StudentQueueTicketPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<AppointmentDto | null>(null);
   const [isExisting, setIsExisting] = useState(false);
 
@@ -367,6 +369,57 @@ export default function StudentQueueTicketPage() {
       }
     } catch (e) {
       setServiceTypesError(String(e));
+    }
+  }
+
+  async function cancelCurrentAppointment() {
+    if (!confirmation) return;
+    if (typeof window === "undefined") return;
+
+    const ok = window.confirm(
+      "Cancel this appointment? This will remove it from the database."
+    );
+    if (!ok) return;
+
+    setCancelling(true);
+    setCancelError(null);
+
+    try {
+      const res = await fetch("/api/student/cancel", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ appointmentId: confirmation.id }),
+      });
+
+      const data = (await res.json().catch(() => null)) as
+        | { deleted: boolean }
+        | { error: string }
+        | null;
+
+      if (!res.ok || !data || "error" in data || !data.deleted) {
+        throw new Error(data && "error" in data ? data.error : "Cancel failed.");
+      }
+
+      // Reset UI back to the beginning.
+      didNotifyTimerEndRef.current = false;
+      setTurnModalOpen(false);
+      setTimerAlert(null);
+      setSmsStatus("idle");
+      setSmsError(null);
+      setRemainingSeconds(null);
+      setIsExisting(false);
+      setConfirmation(null);
+
+      setStudentId("");
+      setStudentName("");
+      setStudentNumber("");
+      setServiceTypeId(serviceTypes[0]?.id ?? "");
+
+      setStep("school");
+    } catch (e) {
+      setCancelError(String(e));
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -681,13 +734,28 @@ export default function StudentQueueTicketPage() {
               ) : null}
             </dl>
 
+            {cancelError ? (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                {cancelError}
+              </div>
+            ) : null}
+
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
                 onClick={() => window.print()}
                 className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-800 px-5 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
               >
-                View Queue Status
+                Check status
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void cancelCurrentAppointment()}
+                disabled={cancelling}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-red-200 bg-white px-5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60 dark:border-red-900/40 dark:bg-zinc-950 dark:text-red-300 dark:hover:bg-red-950/30"
+              >
+                {cancelling ? "Cancelling…" : "Cancel appointment"}
               </button>
             </div>
           </div>
