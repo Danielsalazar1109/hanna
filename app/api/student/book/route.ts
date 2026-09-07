@@ -29,6 +29,27 @@ function etaUntilFrom(args: { createdAt: Date; estimatedWaitMinutes: number }): 
   return new Date(args.createdAt.getTime() + args.estimatedWaitMinutes * 60 * 1000);
 }
 
+function manilaDayBounds(date: Date): { start: Date; end: Date } {
+  // Manila is UTC+8 with no DST.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const y = Number(parts.find((p) => p.type === "year")?.value);
+  const m = Number(parts.find((p) => p.type === "month")?.value);
+  const d = Number(parts.find((p) => p.type === "day")?.value);
+
+  // Convert Manila midnight -> UTC timestamp.
+  const manilaOffsetMs = 8 * 60 * 60 * 1000;
+  const start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0) - manilaOffsetMs);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+
+  return { start, end };
+}
+
 async function computeEstimate(args: {
   schoolId: unknown;
   serviceType: string;
@@ -164,6 +185,28 @@ export async function POST(req: Request) {
 
   const resolvedServiceTypeName = validServiceType.name;
   const resolvedSchoolName = validSchool.name;
+
+  // Enforce per-school daily capacity (0 = unlimited).
+  const dailyCapacityRaw = (validSchool as { dailyCapacity?: unknown } | null)?.dailyCapacity;
+  const dailyCapacity = Number.isFinite(Number(dailyCapacityRaw))
+    ? Number(dailyCapacityRaw)
+    : 0;
+
+  if (dailyCapacity > 0) {
+    const { start, end } = manilaDayBounds(new Date());
+    const used = await AppointmentModel.countDocuments({
+      schoolId: validSchool._id,
+      status: "Scheduled",
+      createdAt: { $gte: start, $lt: end },
+    });
+
+    if (used >= dailyCapacity) {
+      return NextResponse.json(
+        { error: "Sorry, the slots are full." },
+        { status: 409 }
+      );
+    }
+  }
 
   // Prevent duplicate active appointments per studentId.
   const existing = await AppointmentModel.findOne({

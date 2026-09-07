@@ -5,6 +5,8 @@ const SchoolSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     enabled: { type: Boolean, required: true, default: true },
     sortOrder: { type: Number, required: true, default: 0 },
+    // 0 = unlimited. Applies per Asia/Manila day (PH midnight).
+    dailyCapacity: { type: Number, required: true, default: 0, min: 0 },
   },
   { timestamps: true }
 );

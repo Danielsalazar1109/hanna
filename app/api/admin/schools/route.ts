@@ -10,6 +10,7 @@ type SchoolDto = {
   name: string;
   enabled: boolean;
   sortOrder: number;
+  dailyCapacity: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -19,6 +20,7 @@ function toDto(doc: {
   name: string;
   enabled: boolean;
   sortOrder: number;
+  dailyCapacity: number;
   createdAt: Date;
   updatedAt: Date;
 }): SchoolDto {
@@ -27,6 +29,7 @@ function toDto(doc: {
     name: doc.name,
     enabled: doc.enabled,
     sortOrder: doc.sortOrder,
+    dailyCapacity: Number.isFinite(Number(doc.dailyCapacity)) ? Number(doc.dailyCapacity) : 0,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };
@@ -49,7 +52,7 @@ export async function POST(req: Request) {
   await connectMongo();
 
   const body = (await req.json().catch(() => null)) as
-    | { name?: unknown; enabled?: unknown; sortOrder?: unknown }
+    | { name?: unknown; enabled?: unknown; sortOrder?: unknown; dailyCapacity?: unknown }
     | null;
 
   const name = typeof body?.name === "string" ? body.name.trim() : "";
@@ -58,12 +61,28 @@ export async function POST(req: Request) {
     ? Number(body?.sortOrder)
     : 0;
 
+  const dailyCapacity = Number.isFinite(Number(body?.dailyCapacity))
+    ? Number(body?.dailyCapacity)
+    : 0;
+
   if (!name) {
     return NextResponse.json({ error: "name is required." }, { status: 400 });
   }
 
+  if (!Number.isFinite(dailyCapacity) || dailyCapacity < 0) {
+    return NextResponse.json(
+      { error: "dailyCapacity must be a non-negative number." },
+      { status: 400 }
+    );
+  }
+
   try {
-    const created = await SchoolModel.create({ name, enabled, sortOrder });
+    const created = await SchoolModel.create({
+      name,
+      enabled,
+      sortOrder,
+      dailyCapacity,
+    });
     return NextResponse.json({ item: toDto(created.toObject()) }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 });

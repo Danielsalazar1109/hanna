@@ -8,6 +8,7 @@ type SchoolItem = {
   name: string;
   enabled: boolean;
   sortOrder: number;
+  dailyCapacity: number;
 };
 
 type ErrorResponse = { error: string };
@@ -29,6 +30,7 @@ export default function AdminSchoolsPage() {
 
   const [newName, setNewName] = useState("");
   const [newSortOrder, setNewSortOrder] = useState("0");
+  const [newDailyCapacity, setNewDailyCapacity] = useState("0");
 
   async function load() {
     setLoading(true);
@@ -55,6 +57,7 @@ export default function AdminSchoolsPage() {
 
     const name = newName.trim();
     const sortOrder = Number(newSortOrder);
+    const dailyCapacity = Number(newDailyCapacity);
 
     if (!name) {
       setError("Name is required.");
@@ -65,7 +68,11 @@ export default function AdminSchoolsPage() {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ name, sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0 }),
+      body: JSON.stringify({
+        name,
+        sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
+        dailyCapacity: Number.isFinite(dailyCapacity) ? dailyCapacity : 0,
+      }),
     });
 
     const data = (await res.json().catch(() => null)) as unknown;
@@ -77,6 +84,7 @@ export default function AdminSchoolsPage() {
 
     setNewName("");
     setNewSortOrder("0");
+    setNewDailyCapacity("0");
     await load();
   }
 
@@ -168,6 +176,13 @@ export default function AdminSchoolsPage() {
             inputMode="numeric"
             className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
           />
+          <input
+            value={newDailyCapacity}
+            onChange={(e) => setNewDailyCapacity(e.target.value)}
+            placeholder="Daily capacity (0 = unlimited)"
+            inputMode="numeric"
+            className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+          />
           <button
             type="button"
             onClick={create}
@@ -206,6 +221,25 @@ export default function AdminSchoolsPage() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                          Daily cap
+                        </div>
+                        <input
+                          defaultValue={String(it.dailyCapacity ?? 0)}
+                          inputMode="numeric"
+                          onBlur={(e) => {
+                            const v = Number(e.target.value);
+                            if (Number.isFinite(v) && v >= 0 && v !== (it.dailyCapacity ?? 0)) {
+                              void patch(it.id, { dailyCapacity: v });
+                            }
+                          }}
+                          className="mt-1 h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+                        />
+                        <div className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                          0 = unlimited
+                        </div>
+                      </div>
                       <div>
                         <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                           Sort
@@ -259,11 +293,14 @@ export default function AdminSchoolsPage() {
 
           {/* Desktop/tablet: table */}
           <div className="hidden overflow-x-auto sm:block">
-          <table className="w-full min-w-[700px] border-separate border-spacing-0">
+          <table className="w-full min-w-[900px] border-separate border-spacing-0">
             <thead>
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 <th className="border-b border-zinc-200 py-3 pr-3 dark:border-zinc-800">
                   Name
+                </th>
+                <th className="border-b border-zinc-200 py-3 pr-3 dark:border-zinc-800">
+                  Daily cap
                 </th>
                 <th className="border-b border-zinc-200 py-3 pr-3 dark:border-zinc-800">
                   Sort
@@ -279,7 +316,7 @@ export default function AdminSchoolsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="py-6 text-sm text-zinc-600 dark:text-zinc-400">
+                  <td colSpan={5} className="py-6 text-sm text-zinc-600 dark:text-zinc-400">
                     Loading…
                   </td>
                 </tr>
@@ -294,6 +331,19 @@ export default function AdminSchoolsPage() {
                           if (v && v !== it.name) void patch(it.id, { name: v });
                         }}
                         className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+                      />
+                    </td>
+                    <td className="border-b border-zinc-100 py-3 pr-3 dark:border-zinc-900">
+                      <input
+                        defaultValue={String(it.dailyCapacity ?? 0)}
+                        inputMode="numeric"
+                        onBlur={(e) => {
+                          const v = Number(e.target.value);
+                          if (Number.isFinite(v) && v >= 0 && v !== (it.dailyCapacity ?? 0)) {
+                            void patch(it.id, { dailyCapacity: v });
+                          }
+                        }}
+                        className="h-9 w-40 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
                       />
                     </td>
                     <td className="border-b border-zinc-100 py-3 pr-3 dark:border-zinc-900">
@@ -335,7 +385,7 @@ export default function AdminSchoolsPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="py-6 text-sm text-zinc-600 dark:text-zinc-400">
+                  <td colSpan={5} className="py-6 text-sm text-zinc-600 dark:text-zinc-400">
                     No schools yet.
                   </td>
                 </tr>

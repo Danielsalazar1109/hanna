@@ -17,17 +17,34 @@ export async function PATCH(
   const { id } = await ctx.params;
 
   const body = (await req.json().catch(() => null)) as
-    | { name?: unknown; enabled?: unknown; sortOrder?: unknown }
+    | { name?: unknown; enabled?: unknown; sortOrder?: unknown; dailyCapacity?: unknown }
     | null;
 
-  const update: { name?: string; enabled?: boolean; sortOrder?: number } = {};
+  const update: {
+    name?: string;
+    enabled?: boolean;
+    sortOrder?: number;
+    dailyCapacity?: number;
+  } = {};
 
   if (typeof body?.name === "string") update.name = body.name.trim();
   if (typeof body?.enabled === "boolean") update.enabled = body.enabled;
   if (Number.isFinite(Number(body?.sortOrder))) update.sortOrder = Number(body?.sortOrder);
+  if (Number.isFinite(Number(body?.dailyCapacity))) {
+    update.dailyCapacity = Number(body?.dailyCapacity);
+  }
 
   if (update.name !== undefined && !update.name) {
     return NextResponse.json({ error: "name cannot be empty." }, { status: 400 });
+  }
+
+  if (update.dailyCapacity !== undefined) {
+    if (!Number.isFinite(update.dailyCapacity) || update.dailyCapacity < 0) {
+      return NextResponse.json(
+        { error: "dailyCapacity must be a non-negative number." },
+        { status: 400 }
+      );
+    }
   }
 
   try {
