@@ -1,11 +1,29 @@
 import { NextResponse } from "next/server";
+import type { HydratedDocument } from "mongoose";
 import { connectMongo } from "@/lib/mongodb";
-import { AppointmentModel } from "@/lib/models/Appointment";
+import { AppointmentModel, type AppointmentDoc } from "@/lib/models/Appointment";
 import { CounterModel } from "@/lib/models/Counter";
 import { ServiceTypeModel } from "@/lib/models/ServiceType";
 import { SchoolModel } from "@/lib/models/School";
 
 export const runtime = "nodejs";
+
+function normalizePhone(raw: string): string {
+  const trimmed = String(raw ?? "").trim();
+  if (trimmed.startsWith("+")) {
+    return `+${trimmed.slice(1).replace(/\D+/g, "")}`;
+  }
+  const digits = trimmed.replace(/\D+/g, "");
+  return digits.startsWith("0") ? digits.slice(1) : digits;
+}
+
+function isPlausiblePhone(raw: string): boolean {
+  const normalized = normalizePhone(raw);
+  const digits = normalized.startsWith("+") ? normalized.slice(1) : normalized;
+  if (!/^\d{10,15}$/.test(digits)) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+  return true;
+}
 
 function etaUntilFrom(args: { createdAt: Date; estimatedWaitMinutes: number }): Date {
   return new Date(args.createdAt.getTime() + args.estimatedWaitMinutes * 60 * 1000);
@@ -26,19 +44,23 @@ async function computeEstimate(args: {
   return { queuePosition, estimatedWaitMinutes: queuePosition * 15 };
 }
 
-function serviceInitial(serviceType: string): string {
-  const trimmed = serviceType.trim();
-  const first = trimmed[0] ?? "T";
-  return first.toUpperCase();
-}
-
-function counterKey(args: { schoolId: unknown; serviceType: string }): string {
-  const schoolIdStr = String(args.schoolId);
-  const normalizedService = args.serviceType
+function serviceSlug(serviceType: string): string {
+  return serviceType
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function schoolCode(schoolId: unknown): string {
+  const raw = String(schoolId ?? "").trim();
+  const suffix = raw.slice(-4);
+  return (suffix || "SCH").toUpperCase();
+}
+
+function counterKey(args: { schoolId: unknown; serviceType: string }): string {
+  const schoolIdStr = String(args.schoolId);
+  const normalizedService = serviceSlug(args.serviceType);
   return `appointment:${schoolIdStr}:${normalizedService}`;
 }
 
@@ -53,7 +75,10 @@ async function nextTicket(args: {
   );
 
   const ticketSeq = counter.seq;
-  const ticketNumber = `${serviceInitial(args.serviceType)}-${ticketSeq}`;
+  // ticketNumber must be globally unique (DB may enforce unique index on ticketNumber).
+  // Previously it was based on only the first letter of service type (e.g. "C-11"), which
+  // collides across different service types that share the same initial.
+  const ticketNumber = `${schoolCode(args.schoolId)}-${serviceSlug(args.serviceType)}-${ticketSeq}`;
 
   return { ticketSeq, ticketNumber };
 }
@@ -67,6 +92,9 @@ export async function POST(req: Request) {
         studentId?: unknown;
         studentNumber?: unknown;
         serviceType?: unknown;
+        serviceTypeId?: unknown;
+        school?: unknown;
+        schoolId?: unknown;
       }
     | null;
 
@@ -75,13 +103,12 @@ export async function POST(req: Request) {
   const studentId = typeof body?.studentId === "string" ? body.studentId.trim() : "";
   const studentNumber =
     typeof body?.studentNumber === "string" ? body.studentNumber.trim() : "";
-  const serviceType =
-    typeof body?.serviceType === "string" ? body.serviceType.trim() : "";
-  const school = typeof (body as { school?: unknown } | null)?.school === "string"
-    ? String((body as { school?: unknown }).school).trim()
-    : "";
+  const serviceType = typeof body?.serviceType === "string" ? body.serviceType.trim() : "";
+  const serviceTypeId = typeof body?.serviceTypeId === "string" ? body.serviceTypeId.trim() : "";
+  const school = typeof body?.school === "string" ? body.school.trim() : "";
+  const schoolId = typeof body?.schoolId === "string" ? body.schoolId.trim() : "";
 
-  if (!studentName || !studentId || !studentNumber || !serviceType || !school) {
+  if (!studentName || !studentId || !studentNumber || (!serviceType && !serviceTypeId) || (!school && !schoolId)) {
     return NextResponse.json(
       {
         error:
@@ -91,19 +118,28 @@ export async function POST(req: Request) {
     );
   }
 
-  const validServiceType = await ServiceTypeModel.findOne({
-    name: serviceType,
-    enabled: true,
-  }).lean();
+  if (!isPlausiblePhone(studentNumber)) {
+    return NextResponse.json({ error: "Invalid phone number." }, { status: 400 });
+  }
+  const normalizedPhone = normalizePhone(studentNumber);
+
+  const validServiceType = serviceTypeId
+    ? await ServiceTypeModel.findOne({ _id: serviceTypeId, enabled: true }).lean()
+    : await ServiceTypeModel.findOne({ name: serviceType, enabled: true }).lean();
 
   if (!validServiceType) {
     return NextResponse.json({ error: "Invalid service type." }, { status: 400 });
   }
 
-  const validSchool = await SchoolModel.findOne({ name: school, enabled: true }).lean();
+  const validSchool = schoolId
+    ? await SchoolModel.findOne({ _id: schoolId, enabled: true }).lean()
+    : await SchoolModel.findOne({ name: school, enabled: true }).lean();
   if (!validSchool) {
     return NextResponse.json({ error: "Invalid school." }, { status: 400 });
   }
+
+  const resolvedServiceTypeName = validServiceType.name;
+  const resolvedSchoolName = validSchool.name;
 
   // Prevent duplicate active appointments per studentId.
   const existing = await AppointmentModel.findOne({
@@ -145,22 +181,42 @@ export async function POST(req: Request) {
     });
   }
 
-  const { ticketSeq, ticketNumber } = await nextTicket({
-    schoolId: validSchool._id,
-    serviceType,
-  });
+  let appointment: HydratedDocument<AppointmentDoc> | null = null;
+  let lastErr: unknown = null;
 
-  const appointment = await AppointmentModel.create({
-    ticketSeq,
-    ticketNumber,
-    studentName,
-    studentId,
-    studentNumber,
-    schoolId: validSchool._id,
-    school,
-    serviceType,
-    status: "Scheduled",
-  });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { ticketSeq, ticketNumber } = await nextTicket({
+      schoolId: validSchool._id,
+      serviceType: resolvedServiceTypeName,
+    });
+
+    try {
+      const draft = new AppointmentModel({
+        ticketSeq,
+        ticketNumber,
+        studentName,
+        studentId,
+        studentNumber: normalizedPhone,
+        schoolId: validSchool._id,
+        school: resolvedSchoolName,
+        serviceType: resolvedServiceTypeName,
+        status: "Scheduled",
+      });
+      appointment = await draft.save();
+      break;
+    } catch (err) {
+      lastErr = err;
+      const code = (err as { code?: unknown } | null)?.code;
+      if (code === 11000) {
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  if (!appointment) {
+    throw lastErr;
+  }
 
   const { queuePosition, estimatedWaitMinutes } = await computeEstimate({
     schoolId: appointment.schoolId,

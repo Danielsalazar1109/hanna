@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 
 type AppointmentDto = {
@@ -50,6 +50,27 @@ function formatHms(totalSeconds: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function normalizePhone(raw: string): string {
+  const trimmed = String(raw ?? "").trim();
+  // Keep leading + if present, remove everything else except digits.
+  if (trimmed.startsWith("+")) {
+    return `+${trimmed.slice(1).replace(/\D+/g, "")}`;
+  }
+  const digits = trimmed.replace(/\D+/g, "");
+  // For local numbers that use a trunk prefix (e.g. PH: 09xx...), drop the leading 0.
+  return digits.startsWith("0") ? digits.slice(1) : digits;
+}
+
+function isPlausiblePhone(raw: string): boolean {
+  const normalized = normalizePhone(raw);
+  const digits = normalized.startsWith("+") ? normalized.slice(1) : normalized;
+
+  // Basic plausibility: 10-15 digits, not all the same digit.
+  if (!/^\d{10,15}$/.test(digits)) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+  return true;
+}
+
 
 type Step = "studentId" | "namePhone" | "school" | "service" | "confirmed";
 
@@ -62,8 +83,8 @@ export default function StudentQueueTicketPage() {
   const [studentName, setStudentName] = useState("");
   const [studentNumber, setStudentNumber] = useState("");
 
-  const [serviceType, setServiceType] = useState("");
-  const [school, setSchool] = useState("");
+  const [serviceTypeId, setServiceTypeId] = useState("");
+  const [schoolId, setSchoolId] = useState("");
 
   const [serviceTypes, setServiceTypes] = useState<ServiceTypeItem[]>([]);
   const [serviceTypesError, setServiceTypesError] = useState<string | null>(null);
@@ -77,6 +98,16 @@ export default function StudentQueueTicketPage() {
   const [isExisting, setIsExisting] = useState(false);
 
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+
+  const [timerAlert, setTimerAlert] = useState<string | null>(null);
+  const didNotifyTimerEndRef = useRef(false);
+
+  const [turnModalOpen, setTurnModalOpen] = useState(false);
+
+  const [smsStatus, setSmsStatus] = useState<"idle" | "sending" | "sent" | "error">(
+    "idle"
+  );
+  const [smsError, setSmsError] = useState<string | null>(null);
 
   function deadlineMsFrom(appt: AppointmentDto): number | null {
     if (appt.etaUntil) {
@@ -101,17 +132,91 @@ export default function StudentQueueTicketPage() {
   useEffect(() => {
     if (step !== "confirmed" || !confirmation) return;
 
+    didNotifyTimerEndRef.current = false;
+    queueMicrotask(() => {
+      setTimerAlert(null);
+      setSmsStatus("idle");
+      setSmsError(null);
+      setTurnModalOpen(false);
+    });
+
     const deadlineMs = deadlineMsFrom(confirmation);
     if (!deadlineMs) return;
 
     const tick = () => {
       const secs = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
       setRemainingSeconds(secs);
+
+      if (secs !== 0) return;
+      if (didNotifyTimerEndRef.current) return;
+      didNotifyTimerEndRef.current = true;
+
+      const msg = `It's your turn now. Ticket: ${confirmation.ticketNumber}`;
+      setTimerAlert(msg);
+      setTurnModalOpen(true);
+
+      // Try vibration (supported on many Android browsers; may be ignored elsewhere).
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try {
+          (navigator as Navigator & { vibrate?: (pattern: number[] | number) => boolean }).vibrate?.([
+            200,
+            100,
+            200,
+            100,
+            200,
+          ]);
+        } catch {
+          // ignore
+        }
+      }
+
+      // System notification (only if already granted).
+      if (typeof window !== "undefined" && "Notification" in window) {
+        try {
+          if (Notification.permission === "granted") {
+            // eslint-disable-next-line no-new
+            new Notification("SMARTQUEUE", { body: msg });
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // SMS hook (server decides whether SMS is configured / allowed).
+      setSmsStatus("sending");
+      setSmsError(null);
+      fetch("/api/student/notify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ appointmentId: confirmation.id }),
+      })
+        .then((r) => r.json().catch(() => null).then((data) => ({ ok: r.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) {
+            throw new Error(
+              (data as { error?: unknown } | null)?.error
+                ? String((data as { error: unknown }).error)
+                : "SMS failed."
+            );
+          }
+          setSmsStatus("sent");
+        })
+        .catch((e) => {
+          setSmsStatus("error");
+          setSmsError(String(e));
+        });
     };
 
+    queueMicrotask(tick);
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [step, confirmation?.id, confirmation?.estimatedWaitMinutes, confirmation?.etaUntil]);
+  }, [
+    step,
+    confirmation?.id,
+    confirmation?.estimatedWaitMinutes,
+    confirmation?.etaUntil,
+    confirmation?.ticketNumber,
+  ]);
 
   useEffect(() => {
     if (step !== "confirmed" || !confirmation?.studentId) return;
@@ -257,8 +362,8 @@ export default function StudentQueueTicketPage() {
 
       const items = Array.isArray(data.items) ? data.items : [];
       setServiceTypes(items);
-      if (!serviceType && items[0]) {
-        setServiceType(items[0].name);
+      if (!serviceTypeId && items[0]) {
+        setServiceTypeId(items[0].id);
       }
     } catch (e) {
       setServiceTypesError(String(e));
@@ -281,8 +386,8 @@ export default function StudentQueueTicketPage() {
 
       const items = Array.isArray(data.items) ? data.items : [];
       setSchools(items);
-      if (!school && items[0]) {
-        setSchool(items[0].name);
+      if (!schoolId && items[0]) {
+        setSchoolId(items[0].id);
       }
     } catch (e) {
       setSchoolsError(String(e));
@@ -345,15 +450,21 @@ export default function StudentQueueTicketPage() {
     setSubmitError(null);
 
     try {
+      if (!isPlausiblePhone(studentNumber)) {
+        throw new Error(
+          "Please enter a valid phone number (10–15 digits)."
+        );
+      }
+
       const res = await fetch("/api/student/book", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           studentName,
           studentId,
-          studentNumber,
-          school,
-          serviceType,
+          studentNumber: normalizePhone(studentNumber),
+          schoolId,
+          serviceTypeId,
         }),
       });
 
@@ -407,8 +518,76 @@ export default function StudentQueueTicketPage() {
     return (
       <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-12 dark:bg-black">
         <div className="w-full max-w-2xl">
+          {turnModalOpen ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-950/80 px-4 py-6">
+              <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-lg">
+                <h2 className="text-center text-2xl font-bold tracking-tight text-blue-900">
+                  It’s your turn
+                </h2>
+                <p className="mt-2 text-center text-sm text-zinc-600">
+                  Please go to your appointment now.
+                </p>
+
+                <div className="mt-5 rounded-2xl bg-blue-50 p-5 text-center">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                    Ticket number
+                  </div>
+                  <div className="mt-2 text-6xl font-bold text-blue-900">
+                    {confirmation.ticketNumber}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setTurnModalOpen(false)}
+                  className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 px-5 text-base font-semibold text-white hover:bg-blue-500"
+                >
+                  I got it
+                </button>
+
+                <div className="mt-3 text-center text-xs text-blue-100/80">
+                  {smsStatus === "sending"
+                    ? "Sending SMS…"
+                    : smsStatus === "sent"
+                      ? "SMS sent."
+                      : smsStatus === "error"
+                        ? `SMS error: ${smsError ?? "unknown"}`
+                        : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-zinc-200 bg-blue-100 p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
             <Image src="/confirmation.png" alt="Logo" width={100} height={100} className="mx-auto mb-6" />
+
+            {timerAlert ? (
+              <div className="mb-4 rounded-xl border border-blue-200 bg-white p-4 text-sm font-semibold text-blue-900 shadow-sm">
+                {timerAlert}
+                <div className="mt-2 text-xs font-medium text-blue-700">
+                  {smsStatus === "sending"
+                    ? "Sending SMS…"
+                    : smsStatus === "sent"
+                      ? "SMS sent."
+                      : smsStatus === "error"
+                        ? `SMS error: ${smsError ?? "unknown"}`
+                        : null}
+                </div>
+              </div>
+            ) : null}
+
+            {typeof window !== "undefined" && "Notification" in window && Notification.permission !== "granted" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void Notification.requestPermission().catch(() => {});
+                }}
+                className="mb-4 inline-flex h-10 w-full items-center justify-center rounded-xl border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-900 hover:bg-blue-50"
+              >
+                Enable notifications
+              </button>
+            ) : null}
+
             <h1 className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 text-center">
               {isExisting ? "Appointment already scheduled" : "Your queue number has been successfully generated"}
             </h1>
@@ -591,6 +770,15 @@ export default function StudentQueueTicketPage() {
                   className="h-11 rounded-xl border border-zinc-200 bg-white px-4 text-sm text-zinc-900 shadow-sm outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
                   required
                 />
+                {!studentNumber ? null : isPlausiblePhone(studentNumber) ? (
+                  <div className="text-xs text-zinc-500">
+                    Looks good.
+                  </div>
+                ) : (
+                  <div className="text-xs font-semibold text-red-700">
+                    Please enter a real phone number (10–15 digits).
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -643,7 +831,7 @@ export default function StudentQueueTicketPage() {
                 ) : (
                   <div role="radiogroup" aria-label="School" className="grid gap-2">
                     {schools.map((s) => {
-                      const selected = school === s.name;
+                      const selected = schoolId === s.id;
 
                       return (
                         <button
@@ -651,7 +839,7 @@ export default function StudentQueueTicketPage() {
                           type="button"
                           role="radio"
                           aria-checked={selected}
-                          onClick={() => setSchool(s.name)}
+                          onClick={() => setSchoolId(s.id)}
                           className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm shadow-sm transition ${
                             selected
                               ? "border-blue-700 bg-blue-50 text-zinc-900 dark:border-blue-400 dark:bg-blue-950/40 dark:text-zinc-50"
@@ -677,7 +865,7 @@ export default function StudentQueueTicketPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!school || submitting || !schools.length}
+                  disabled={!schoolId || submitting || !schools.length}
                   className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-800 px-10 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
                 >
                   Get Queue Number
@@ -711,7 +899,7 @@ export default function StudentQueueTicketPage() {
                 ) : (
                   <div role="radiogroup" aria-label="Service type" className="grid gap-2">
                     {serviceTypes.map((t) => {
-                      const selected = serviceType === t.name;
+                      const selected = serviceTypeId === t.id;
 
                       return (
                         <button
@@ -719,7 +907,7 @@ export default function StudentQueueTicketPage() {
                           type="button"
                           role="radio"
                           aria-checked={selected}
-                          onClick={() => setServiceType(t.name)}
+                          onClick={() => setServiceTypeId(t.id)}
                           className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm shadow-sm transition ${
                             selected
                               ? "border-blue-700 bg-blue-50 text-zinc-900 dark:border-blue-400 dark:bg-blue-950/40 dark:text-zinc-50"
@@ -745,7 +933,7 @@ export default function StudentQueueTicketPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!serviceType || submitting || !serviceTypes.length}
+                  disabled={!serviceTypeId || submitting || !serviceTypes.length}
                   className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-800 px-10 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
                 >
                   {submitting ? "Submitting…" : "Continue"}
